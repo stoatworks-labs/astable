@@ -1,0 +1,11 @@
+{
+  "name": "astable",
+  "version-string": "0.1.0",
+  "description": "Dependencies for building the Astable FFGL plugin. GLEW is only needed on Windows; macOS uses the system OpenGL framework. There are no other dependencies: the 555 model is arithmetic and the renderer is GLSL.",
+  "dependencies": [
+    {
+      "name": "glew",
+      "platform": "!osx"
+    }
+  ]
+}

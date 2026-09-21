@@ -169,6 +169,26 @@ rather than the one it is not.
 over eight frames Ch6's output never goes low, so blanking on it is
 indistinguishable from not blanking.
 
+### Driving Arena on win-lab: two traps that cost the whole run
+
+Both were hit on 2026-09-21 and both look like the plugin's fault at first.
+
+**An ssh session on Windows has no desktop.** It lands on the service window
+station, so an Arena started from it sits at about 31 MB doing nothing, cannot
+open a GL context and cannot be screenshotted. Arena has to be launched into the
+console session (session 1) through the scheduled-task wrapper
+`C:\arena-lab\s1.ps1`. There is no "it failed to load the plugin" in this
+failure mode — there is just no Arena.
+
+**Arena's REST API is good for reading and useless for instantiating.**
+`/api/v1/sources` and `/api/v1/effects` list plugins by **`idstring`**, which is
+the FFGL id (`AT01` here), not the display name — so search for the id, not for
+`SW Astable`. But the add-effect endpoint returns **200 with nothing added**: the
+clip's effect list is unchanged afterwards. Instantiation has to be driven from
+Arena's own browser (the Sources tab for this plugin, double-click in the effects
+browser for the effect-shaped siblings), and the proof that it happened is the
+plugin's own diag log plus the preview, not the API's response.
+
 ### The SDK's traps, all inherited and all still live
 
 These were found by tinsel, vectrix, graticule and resolume-scopes first; the
@@ -256,20 +276,55 @@ gap or double-draw at the boundary. vectrix steps every sample instead and runs
 - **The bundle is universal and registers**: `lipo` reports `x86_64 arm64`,
   `nm` finds `_plugMain`, and `oxbow selftest` instantiates it and lights
   21,293 pixels — reported as `SW Astable` / `AT01` / source.
-- **Cost**: 0.377 / 0.394 / 0.871 ms per frame at 720p / 1080p / 4K.
+- **Cost**: 0.377 / 0.394 / 0.871 ms per frame at 720p / 1080p / 4K. macOS only.
+
+**Verified in Resolume Arena 7.27.1 on Windows, 2026-09-21** — on **win-lab**, an
+x64 Windows 11 Pro VM with no GPU, so OpenGL is **Mesa llvmpipe** dropped in
+beside Arena (`renderer=llvmpipe (LLVM 22.1.8, 256 bits)`, `4.5 (Core Profile)
+Mesa 26.2.0`). The DLL is cross-compiled x64 in the Parallels guest on this Mac
+(ARM64 Windows 11, MSVC 2022 Build Tools, `cmake -A x64`, vcpkg triplet
+`x64-windows-static-md`) — 412,672 bytes, and `dumpbin /EXPORTS` shows
+`plugMain`.
+
+- **Arena registers it.** Its REST API lists `SW Astable` among 24 video sources
+  under `idstring` `AT01`, with the declared description.
+- **Arena loads the DLL**: `plugin loaded build=<stamp>` in the diag log under
+  `%LOCALAPPDATA%\astable\`, matching the DLL built minutes earlier.
+- **Arena instantiates it and the shaders compile.** Instantiated from the
+  **Sources** tab, it created a clip and Arena drew its inspector with the
+  component values in it, and the preview monitor showed **the four dwell dots**
+  — the default preset visibly correct in the host. That is a screenshot of the
+  expected picture, not a measurement.
+- **The host clock unit detection was exercised by a real host and got both
+  cases right.** The same build logged `host clock scale 1.0 (seconds)` under
+  oxbow and `host clock scale 0.001 (milliseconds)` under Arena (Arena's raw host
+  time was ≈ 574,073 at the time of the run). This is the cleanest real-host
+  finding this plugin has, and the first time `source/signal/Clock.*` has met a
+  host that is not ours. Note that the sibling repos' guards on the same detector
+  differ — rosette's strict one falls back to the wall clock offline — so do not
+  assume a change here is safe there.
+- **`oxbow selftest` on x64 Windows**: 120 frames, gl error 0x0, **PASS**, 35,482
+  of 921,600 pixels lit (3.9%). The diag log has no WARN, ERROR or FAIL.
 
 **Assumed, or not yet done:**
 
-- **Never loaded into Resolume.** How eighty-seven controls in eleven groups
-  present in the inspector is untested, and so is whether the preset override
-  reads sensibly to an operator.
+- **Never run on a GPU in Resolume, and never instantiated in Arena on macOS.**
+  Everything in the host was llvmpipe, a software rasteriser, and **nothing was
+  timed on Windows** — do not turn the Windows run into a performance claim.
+- **Nothing long was exercised in the host**: no long session, no composition
+  save and reload, no preset recall in Arena. Whether eighty-seven controls in
+  eleven groups is *usable* in the inspector, rather than merely present, is
+  still untested, and so is whether the preset override reads sensibly to an
+  operator.
 - **Never checked against a real 555.** See "what does not fall out", above.
-- **Windows has never been compiled**, because CI cannot run: there is no
-  GitHub repo yet. The CMakeLists has the GLEW path the fleet uses and that is
-  reasoning, not evidence.
-- **No audio has arrived from a host.** The bin count and the `sqrt` on the
-  magnitudes come from regauss and vectrix rather than from a measurement here;
-  `--audio` injects a flat spectrum and only proves the path is connected.
+- **The Windows DLL is not built by CI**: there is no GitHub repo yet, so the x64
+  build is cross-compiled by hand in the guest. The CMakeLists' GLEW path is now
+  evidence for that route and nothing else.
+- **No audio has arrived from a host.** It was loaded in Arena and no real audio
+  reached it there either. The bin count and the `sqrt` on the magnitudes come
+  from regauss and vectrix rather than from a measurement here; `--audio` injects
+  a flat spectrum and only proves the path is connected. Resolume's 64-bin FFT
+  mapping is still assumed, not measured.
 - **The phosphor figures for P4 and P22 are from published JEDEC data**, but
   P22-as-one-white is an approximation with no equivalent in a real set: a
   single-beam model cannot have a shadow mask, so what is modelled is the white

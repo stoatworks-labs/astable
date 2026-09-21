@@ -72,8 +72,18 @@ coverage.
   too — see ATTRIBUTIONS.md.
 
 ## Not done yet
-- Never loaded into Resolume, and never checked against a real 555.
-- Windows never compiled (CI cannot run: no GitHub repo yet).
+- Registered, loaded and instantiated in Resolume Arena 7.27.1 on Windows
+  (2026-09-21) on Mesa llvmpipe, with the four dwell dots visible in Arena's
+  preview. **Never on a GPU in Resolume, never in Arena on macOS**, and nothing
+  was timed on Windows — the ms/frame figures are macOS-only. No long session,
+  no composition save/reload, no preset recall in the host.
+- Never checked against a real 555.
+- Windows x64 DLL is cross-compiled by hand in the Parallels guest (412,672 B,
+  `plugMain` exported). CI still cannot run: no GitHub repo yet.
+- Driving Arena on win-lab: an ssh session has no desktop, so launch Arena via
+  the session-1 scheduled task `C:\arena-lab\s1.ps1`; Arena's REST API lists
+  plugins by `idstring` (`AT01`) and its add-effect endpoint returns 200 without
+  adding anything, so instantiate from Arena's own browser. See `AGENTS.md`.
 - No release tag, no website registration, no OpenFX port, no browser demo.
 - `StoatworksAbout.h` and `ATTRIBUTIONS.md` are provisional hand copies with
   `guide=""`, as graticule's are.

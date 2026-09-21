@@ -8,7 +8,9 @@
 > `attest --swing` checks the capacitor really runs between V5/2 and V5, and
 > `attest --yoke` fits a coil's step response and fails if the time constant is
 > more than 1% out. A control sweep fails if any parameter turns out to do
-> nothing. **It has never been loaded into Resolume** — see [Status](#status).
+> nothing. **It has been registered, loaded and instantiated in Resolume Arena
+> 7.27.1 on Windows, on a software rasteriser — never on a GPU in Resolume, and
+> never in Arena on macOS** — see [Status](#status).
 
 Six 555 timers on a breadboard, patched into the X, Y and brightness of a
 television's deflection yoke. An FFGL **source** plugin for
@@ -161,23 +163,51 @@ PNGs. `./build/attest --out /tmp/f.png --preset 4` renders a frame;
 | oxbow | the bundle registers, instantiates and lights pixels in a real FFGL host — reported as `SW Astable` / `AT01` / source |
 
 Render cost, from `attest --bench`: **0.377 ms/frame at 720p, 0.394 at 1080p,
-0.871 at 4K** — about 2.4% of a 60 fps frame at 1080p.
+0.871 at 4K** — about 2.4% of a 60 fps frame at 1080p. macOS only; nothing has
+been timed on Windows.
+
+### In Resolume Arena, on Windows — 2026-09-21
+
+The x64 Windows DLL is cross-compiled in the Parallels guest on this Mac (ARM64
+Windows 11, MSVC 2022 Build Tools, `cmake -A x64`, vcpkg triplet
+`x64-windows-static-md`); there is no x64 Windows machine in the build loop. It
+is **412,672 bytes** — the largest of the six plugins built that day — and
+`dumpbin /EXPORTS` shows `plugMain`.
+
+It then ran on **win-lab**, an x64 Windows 11 Pro VM with no GPU, so OpenGL came
+from **Mesa llvmpipe** dropped in beside Arena: the plugin reported
+`renderer=llvmpipe (LLVM 22.1.8, 256 bits)`, `4.5 (Core Profile) Mesa 26.2.0`.
+
+| check | what it establishes |
+|---|---|
+| Arena registers it | Arena's own REST API lists `SW Astable` among 24 video sources, under `idstring` `AT01`, with the description the plugin declares |
+| Arena loads the DLL | the plugin wrote `plugin loaded build=<stamp>` to its diag log under `%LOCALAPPDATA%\astable\`, carrying the stamp of the DLL built minutes earlier |
+| Arena instantiates it, and the shaders compile | instantiated from Arena's **Sources** tab, where it created a clip, with the component values reading off in Arena's own inspector |
+| the default preset is right inside the host | Arena's preview monitor showed **the four dwell dots** two square waves put on a yoke. That is a screenshot of the expected picture, not a measurement |
+| the host clock unit detection is exercised by a real host | the same build logged `host clock scale 1.0 (seconds)` under oxbow and `host clock scale 0.001 (milliseconds)` under Arena — both right, and the first time that code has met a real host |
+| `oxbow selftest`, x64 Windows | 120 frames, gl error 0x0, **PASS**, 35,482 of 921,600 pixels lit (3.9%) |
+| no warnings | the diag log is clean of WARN, ERROR and FAIL |
 
 **What is NOT established:**
 
-- **It has never been loaded into Resolume.** Everything above was compiled,
-  rendered and measured offline against the real plugin class in a headless GL
-  context. How the parameters *present* — whether eighty-seven controls in
-  eleven groups is usable in the inspector, whether the preset override reads
-  sensibly — is untested.
+- **It has never run on a GPU in Resolume, and has never been instantiated in
+  Arena on macOS.** The Windows run was entirely on llvmpipe, a software
+  rasteriser, and says nothing about performance in a host.
+- **Nothing longer than a look was exercised in the host.** No long session, no
+  composition save and reload, and no preset recall in Arena — so whether the
+  preset override reads sensibly to an operator over a session is still open,
+  as is whether eighty-seven controls in eleven groups is usable rather than
+  merely present.
 - **Nothing has been checked against a real 555.** The model follows the
   datasheet and the measurements agree with the datasheet, which is a claim
   about internal consistency, not about a part on a breadboard.
-- **The Windows build has never been compiled**, let alone run: CI cannot run
-  yet because the repo is not on GitHub.
-- **No audio has reached it from a host.** The audio path has only ever seen
-  the harness's injected flat spectrum, so the bin count and the `sqrt` on the
+- **The Windows DLL is not built by CI**: the repo is not on GitHub, so the x64
+  build is cross-compiled by hand in the Parallels guest.
+- **No audio has reached it from a host.** It was loaded in Arena, but no real
+  audio arrived there either; the audio path has still only ever seen the
+  harness's injected flat spectrum, so the bin count and the `sqrt` on the
   magnitudes are taken from the fleet's other plugins rather than measured here.
+  Resolume's 64-bin FFT mapping remains an assumption.
 - No OpenFX port and no browser demo — neither is in scope for 0.1.0.
 - No release tag, no website registration. `source/StoatworksAbout.h` and
   `ATTRIBUTIONS.md` are provisional hand copies.
@@ -187,7 +217,9 @@ Render cost, from `attest --bench`: **0.377 ms/frame at 720p, 0.394 at 1080p,
 `source/Diag.{h,cpp}` writes a log file and nothing else: no crash handler,
 since this runs inside someone else's host. It exists for the one failure that
 actually happens — a shader that will not compile, which otherwise looks like
-"the source does nothing" with no message anywhere. `~/Library/Logs/astable/`.
+"the source does nothing" with no message anywhere. `~/Library/Logs/astable/` on
+macOS, `%LOCALAPPDATA%\astable\` on Windows — that log is what proved Arena had
+loaded the DLL and compiled the shaders.
 
 <!-- attributions:start -->
 This project is built on other people's work — see [ATTRIBUTIONS.md](ATTRIBUTIONS.md).

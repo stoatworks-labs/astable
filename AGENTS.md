@@ -317,9 +317,11 @@ Mesa 26.2.0`). The DLL is cross-compiled x64 in the Parallels guest on this Mac
   still untested, and so is whether the preset override reads sensibly to an
   operator.
 - **Never checked against a real 555.** See "what does not fall out", above.
-- **The Windows DLL is not built by CI**: there is no GitHub repo yet, so the x64
-  build is cross-compiled by hand in the guest. The CMakeLists' GLEW path is now
-  evidence for that route and nothing else.
+- **The Windows DLL that ran in Arena was not CI's.** CI builds x64 Windows on
+  every push and the release workflow builds it again on a GitHub runner — both
+  have run and passed, so the CMakeLists' GLEW path is now evidence for that
+  route too — but the DLL put in front of Arena was cross-compiled by hand in
+  the guest, and CI's has never been in front of a host.
 - **No audio has arrived from a host.** It was loaded in Arena and no real audio
   reached it there either. The bin count and the `sqrt` on the magnitudes come
   from regauss and vectrix rather than from a measurement here; `--audio` injects
@@ -330,9 +332,12 @@ Mesa 26.2.0`). The DLL is cross-compiled x64 in the Parallels guest on this Mac
   single-beam model cannot have a shadow mask, so what is modelled is the white
   the three phosphors make together, keeping only the red's millisecond lag.
 - **No OpenFX port and no browser demo.** Neither is in scope for 0.1.0.
-- No release tag, no website registration; `StoatworksAbout.h` and
-  `ATTRIBUTIONS.md` are provisional hand copies with `guide=""`, as graticule's
-  are.
+- **No user guide**, so `StoatworksAbout.h` carries `guide=""`. That header is
+  **generated** by `sync-about.py` now — the project is registered in the
+  website's `projects.json`, in that script's TARGETS and in
+  `attributions/names.json` — so do not hand-edit it. `ATTRIBUTIONS.md` is still
+  a provisional hand copy, because `sync-attributions.py`'s master lists do not
+  know this repo yet.
 
 ---
 

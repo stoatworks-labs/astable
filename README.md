@@ -168,11 +168,12 @@ been timed on Windows.
 
 ### In Resolume Arena, on Windows — 2026-09-21
 
-The x64 Windows DLL is cross-compiled in the Parallels guest on this Mac (ARM64
-Windows 11, MSVC 2022 Build Tools, `cmake -A x64`, vcpkg triplet
-`x64-windows-static-md`); there is no x64 Windows machine in the build loop. It
-is **412,672 bytes** — the largest of the six plugins built that day — and
-`dumpbin /EXPORTS` shows `plugMain`.
+The DLL taken to Arena was cross-compiled in the Parallels guest on this Mac
+(ARM64 Windows 11, MSVC 2022 Build Tools, `cmake -A x64`, vcpkg triplet
+`x64-windows-static-md`), because there is no x64 Windows machine in the local
+build loop. It is **412,672 bytes** — the largest of the six plugins built that
+day — and `dumpbin /EXPORTS` shows `plugMain`. The released DLL is a different
+build, made on a GitHub runner, and has not been in front of Arena.
 
 It then ran on **win-lab**, an x64 Windows 11 Pro VM with no GPU, so OpenGL came
 from **Mesa llvmpipe** dropped in beside Arena: the plugin reported
@@ -201,16 +202,20 @@ from **Mesa llvmpipe** dropped in beside Arena: the plugin reported
 - **Nothing has been checked against a real 555.** The model follows the
   datasheet and the measurements agree with the datasheet, which is a claim
   about internal consistency, not about a part on a breadboard.
-- **The Windows DLL is not built by CI**: the repo is not on GitHub, so the x64
-  build is cross-compiled by hand in the Parallels guest.
+- **The Windows DLL that ran in Arena was not the one CI builds.** CI builds x64
+  Windows on every push and the release workflow builds it again on a GitHub
+  runner — both have run and passed — but the DLL put in front of Arena was
+  cross-compiled by hand in the Parallels guest.
 - **No audio has reached it from a host.** It was loaded in Arena, but no real
   audio arrived there either; the audio path has still only ever seen the
   harness's injected flat spectrum, so the bin count and the `sqrt` on the
   magnitudes are taken from the fleet's other plugins rather than measured here.
   Resolume's 64-bin FFT mapping remains an assumption.
-- No OpenFX port and no browser demo — neither is in scope for 0.1.0.
-- No release tag, no website registration. `source/StoatworksAbout.h` and
-  `ATTRIBUTIONS.md` are provisional hand copies.
+- No user guide, no OpenFX port and no browser demo — none of them in scope for
+  0.1.0.
+- `ATTRIBUTIONS.md` is still a provisional hand copy in the shape the fleet's
+  sync scripts generate. `source/StoatworksAbout.h` is not: it is generated from
+  the project's registration, and hand-editing it will be overwritten.
 
 ## Diagnostics
 

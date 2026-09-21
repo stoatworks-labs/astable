@@ -230,9 +230,13 @@ renderer copied here already works around them, and anything new must too.
     source/signal/Signal.h    the Sample{x,y,z,dt} contract      ] copied from
     source/signal/Clock.*     ms-or-seconds detection, dt clamp  ] vectrix
     source/render/*           the energy-conserving beam renderer ]
-    tools/attest/             the offline harness
+    tools/attest/             the offline harness, including --pipe
     tools/sweep.py            no control is silently dead
     tools/verify.sh           all of it
+    demo/plugin.js            the browser demo: the nine GLSL fragments copied
+                              verbatim, plus a JS port of the whole engine
+    demo/tools/               check_shaders.py — the two shader copies agree
+    demo/vendor/              the shared kit, copied in by sync.sh. Do not edit
 
 ### The engine rate is chosen from the parts
 
@@ -340,6 +344,59 @@ Mesa 26.2.0`). The DLL is cross-compiled x64 in the Parallels guest on this Mac
   know this repo yet.
 
 ---
+
+## The browser demo
+
+`demo/` is the page at **astable-demo.stoatworks-labs.com**. It is a *port*, not
+a recording and not the plugin, and the distinction is the whole reason the
+directory is allowed to exist:
+
+- **The shaders are the plugin's.** The nine constants in `demo/plugin.js` are
+  the nine `R"(...)"` bodies in `source/render/shaders/`, copied across unedited
+  and assembled the way `Prelude.cpp` assembles them.
+  `demo/tools/check_shaders.py` compares them character for character —
+  comments included, because the comments in this repo carry the measurements
+  that justify the code — and `tools/verify.sh` runs it. **Two copies of a
+  shader is exactly the arrangement that drifts**, and a demo that renders a
+  *plausible* picture looks exactly like one that renders the right one.
+- **The engine is a full port.** `Timer555`, `Bench`, `Phosphor`, `Tube`,
+  `Controls` and the seven preset rows, all six channels, at the plugin's own
+  rate. It runs at about 50 fps at 1280×720 on an M4 Max, so there was no reason
+  to port fewer than six. **Nothing checks this port but a reader** — `attest`
+  drives the C++ and has no idea the page exists.
+
+### Decisions the page made, and why
+
+- **No clip picker and no file input.** A source declares zero inputs and the
+  glass shader's `HasClip` is 0, so `ClipTexture` is never read. The shared kit
+  builds both controls for every demo; the page removes them from the DOM after
+  mounting. A control that is present and inert is a worse answer than one that
+  is absent. If a second sourceless plugin joins the kit, that is the moment to
+  teach `demo.js` about it rather than repeating this.
+- **`demo.blurb` is set.** The stock banner says the page runs "on generated
+  clips", which for a source would be the banner itself making the kind of claim
+  the banner exists to prevent.
+- **Nothing audio.** The `Audio` FFT buffer parameter and `Audio Gain` are
+  absent — there is no Resolume FFT in a browser, and asking a visitor for a
+  microphone to demo a video source is not a trade worth making. The `Audio`
+  element stays in every channel's CV Source dropdown, because it is the
+  plugin's element list and the value is its index; it reads as a permanent
+  silence and says so.
+- **`Preset` is the plugin's override, not the kit's preset menu.** The kit
+  offers a `demo.presets` dropdown that *writes* values. The plugin's is an
+  override applied at read time, so the sliders show one thing while the bench
+  runs another — which reads as a bug and is the host's fault, not the
+  plugin's. The page reproduces `Effective()` rather than papering over it.
+- **Restart is a power cycle.** The kit's transport puts `time` back to zero,
+  and time running backwards is the one thing a deflection amplifier cannot do,
+  so the page takes it as `Clock::Reset` + `Bench::Reset` rather than as a very
+  long frame.
+
+### What it is not evidence about
+
+GLSL ES 3.00 in WebGL2, not desktop GL 4.1 core; a browser's clock, not a
+host's; and nothing on the page measures anything. `tools/attest` is the reason
+to believe the model, and it is named on the page as such.
 
 ## Relationship to vectrix
 

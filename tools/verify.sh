@@ -270,6 +270,28 @@ else
 fi
 
 #---------------------------------------------------------------------------
+head_ "The browser demo"
+#---------------------------------------------------------------------------
+# `demo/plugin.js` carries nine GLSL fragments and so does
+# `source/render/shaders/`. That is two copies of the same text, and two copies
+# drift — quietly, because a demo that renders a PLAUSIBLE picture looks exactly
+# like one that renders the right one. The page's whole claim is that it runs the
+# plugin's own shaders rather than something reimplemented to look similar, so
+# the claim needs something enforcing it, and nothing else can: `attest` drives
+# the real plugin class through the real FFGL sequence and has no idea the page
+# exists.
+if [ -f demo/tools/check_shaders.py ]; then
+    if out="$( python3 demo/tools/check_shaders.py 2>&1 )"; then
+        ok "$( printf '%s' "$out" | tail -1 )"
+    else
+        bad "the demo's shader copies have drifted from source/render/shaders/"
+        printf '%s\n' "$out" | tail -12
+    fi
+else
+    printf '   skipped: demo/tools/check_shaders.py is not present\n'
+fi
+
+#---------------------------------------------------------------------------
 head_ "Controls"
 #---------------------------------------------------------------------------
 # A GLSL uniform name that does not match the C++ is silently ignored --

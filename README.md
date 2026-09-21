@@ -23,6 +23,11 @@ a Resolume screen capture. Real frames through the real shipped plugin class.
 The figure is brightest at its turnarounds because that is where the beam is
 slowest; the yellow trailing edge is P4's slow layer.</sub>
 
+**[Try it in your browser](https://astable-demo.stoatworks-labs.com)** — the
+plugin's own shaders ported to WebGL2 over a JavaScript port of the 555 engine,
+with every control and every preset. It is a port and not the plugin: read what
+[the page itself says it does not reproduce](https://astable-demo.stoatworks-labs.com).
+
 <!-- downloads:start -->
 
 ## Download
@@ -162,7 +167,7 @@ GLEW via vcpkg. C++17 + GLSL 4.10, FFGL 2.1 with the SDK as a submodule.
 ## Building and testing
 
 ```bash
-tools/verify.sh              # everything: 22 checks, about 11 seconds
+tools/verify.sh              # everything: 23 checks, about 11 seconds
 ./build/attest --period      # the datasheet formula, measured
 ./build/attest --dots        # two squares into X and Y really are four dots
 ./build/attest --yoke        # a coil's step response is the right exponential
@@ -174,11 +179,25 @@ comes from a frame counter, so two runs of the same command produce identical
 PNGs. `./build/attest --out /tmp/f.png --preset 4` renders a frame;
 `--list` prints every parameter with the units the host is shown.
 
+`--pipe` writes raw RGBA frames to stdout for the video pipeline. Astable is a
+source, so unlike the effects' harnesses it reads nothing — there is no stdin
+side:
+
+```bash
+./build/attest --pipe --width 1920 --height 1080 --frames 600 --preset 7 \
+  | ffmpeg -f rawvideo -pix_fmt rgba -s 1920x1080 -r 60 -i - astable.mov
+```
+
+`--script cues.txt` automates parameters over the take, one
+`frame  Parameter Name  value` per line, interpolated between keys — the same
+format the rest of the fleet's harnesses take. Without `--frames` it writes
+until the reader stops.
+
 ## Status
 
 **v0.1.0, and honestly early.** Dated 2026-09-21.
 
-**Verified on this machine** (M4 Max, macOS 26.4), all 22 checks in
+**Verified on this machine** (M4 Max, macOS 26.4), all 23 checks in
 `tools/verify.sh`:
 
 | check | what it establishes |
@@ -193,6 +212,7 @@ PNGs. `./build/attest --out /tmp/f.png --preset 4` renders a frame;
 | `--names` | no name or display string over FFGL's 16 characters |
 | `tools/sweep.py` | all **82** swept parameters measurably change the picture; 5 skipped with reasons |
 | oxbow | the bundle registers, instantiates and lights pixels in a real FFGL host — reported as `SW Astable` / `AT01` / source |
+| `demo/tools/check_shaders.py` | the browser demo's nine shader copies are byte-identical to `source/render/shaders/` |
 
 Render cost, from `attest --bench`: **0.377 ms/frame at 720p, 0.394 at 1080p,
 0.871 at 4K** — about 2.4% of a 60 fps frame at 1080p. macOS only; nothing has

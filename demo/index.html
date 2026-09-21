@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Astable — browser demo | Stoatworks Labs</title>
+    <meta name="description" content="Try the Astable FFGL source for Resolume in your browser: six 555 timers, a patch bay and a television's deflection yoke. The plugin's own beam and tube shaders, ported to WebGL2, driven by a port of its 555 engine." />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./vendor/kit.css" />
+    <link rel="canonical" href="https://astable-demo.stoatworks-labs.com/" />
+  </head>
+  <body>
+    <main id="demo">
+      <noscript>
+        <p>
+          This demo runs the plugin's shaders in your browser, so it needs
+          JavaScript and WebGL2. The plugin itself, its source and its downloads
+          are on
+          <a href="https://github.com/stoatworks-labs/astable">its repository</a>.
+        </p>
+      </noscript>
+    </main>
+
+    <script type="module" src="./plugin.js"></script>
+    <script
+      src="./vendor/support-footer.js"
+      defer
+      data-app="Astable"
+      data-repo="https://github.com/stoatworks-labs/astable"
+      data-note="A browser demo of the plugin's beam and tube shaders, over a port of its 555 bench. It is a source: it reads nothing, and nothing you do here leaves your machine."
+    ></script>
+  </body>
+</html>

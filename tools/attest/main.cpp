@@ -27,6 +27,30 @@
         --out PATH   render a frame     --size WxH   --frames N   --preset N
         --list       every parameter    --set "Name=value" (repeatable)
         --audio L    a flat spectrum whose folded level is L, 0..1
+        --pipe       raw RGBA frames on stdout, for the video pipeline
+
+    ## --pipe
+
+    The fleet's frame format, so one filming script can drive any of the FFGL
+    plugins. Astable is a **source**: it declares zero inputs and reads nothing,
+    so unlike tinsel's or porthole's this end of the pipe has no stdin side.
+    Nothing is read; frames are written until `--frames` is reached, or until
+    the reader closes the pipe if no count was asked for.
+
+        attest --pipe --width 1920 --height 1080 --frames 600 [--script cues.txt] \
+          | ffmpeg -f rawvideo -pix_fmt rgba -s 1920x1080 -r 60 -i - out.mov
+
+    `--script` is a plain text file of `frame  Parameter Name  value` lines --
+    `frame  Name=value` is accepted too -- held before the first key and after
+    the last, and linearly interpolated between. Note what interpolating means
+    for an OPTION parameter: moving Preset from Four Dots to Raster passes
+    through every row between them, so key such a parameter one frame apart to
+    cut, and give it a hold key at the END of every section it must not move in.
+
+    A name that is not a parameter is refused rather than ignored, because a
+    misspelled name that silently did nothing would produce a take that looks
+    deliberate and is wrong -- the reel would hold whatever the default was,
+    under a caption describing a control that never moved.
 
     ## Determinism
 
@@ -60,15 +84,20 @@
 #include <OpenGL/gl3.h>
 #include <zlib.h>
 
+#include <unistd.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <csignal>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <limits>
 #include <map>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -280,11 +309,20 @@ bool startPlugin( AstablePlugin& plugin, const Target& target )
 	return plugin.InitGL( &viewport ) == FF_SUCCESS;
 }
 
-bool renderFrame( AstablePlugin& plugin, const Target& target, int frameIndex )
+/// `frameSeconds` is how long the plugin is told this frame lasted. It is a
+/// parameter only because `--pipe` takes an `--fps`: everything else here runs
+/// at 1/60 exactly, which sits inside `Clock`'s [1/240, 1/24] clamp so the
+/// clamp never fires and the sample count is a function of the engine rate
+/// alone. A `--fps` outside that window IS clamped, and the reel then advances
+/// in engine time more slowly (or faster) than its own frame numbering says --
+/// which is a real filming decision rather than a bug, and is why the clamp is
+/// named here rather than hidden.
+bool renderFrame( AstablePlugin& plugin, const Target& target, int frameIndex,
+                  double frameSeconds = kFrameSeconds )
 {
 	//The whole of the harness's determinism is these two lines.
 	plugin.SetClockScaleForTest( 1.0 );
-	plugin.SetTime( static_cast< double >( frameIndex ) * kFrameSeconds );
+	plugin.SetTime( static_cast< double >( frameIndex ) * frameSeconds );
 
 	ProcessOpenGLStruct process {};
 	process.numInputTextures = 0;
@@ -1568,6 +1606,228 @@ int listParameters()
 	return 0;
 }
 
+//---------------------------------------------------------------------------
+// --pipe: raw frames out, and the cue sheet that automates them.
+//
+// The format is the fleet's -- tinsel's tinseltest, porthole's phtest,
+// old-cathode's octest -- on purpose, so one build.py can film any of them.
+// The difference here is the one that matters about this plugin: it is a
+// SOURCE. `SetMinInputs( 0 )`, `SetMaxInputs( 0 )`, `numInputTextures = 0`,
+// `HasClip` 0 in the glass shader. So this end of the pipe has no stdin side
+// at all, and the loop is bounded by a frame count or by the reader hanging up
+// rather than by end of input.
+//---------------------------------------------------------------------------
+using Track = std::vector< std::pair< int, float > >;
+
+/// One `frame  Parameter Name  value` per line. `frame  Name=value` is accepted
+/// too, because `--set` spells it that way and a filming script that mixes the
+/// two should not be a silent no-op. `#` starts a comment.
+std::map< std::string, Track > loadScript( const std::string& path, std::string& error )
+{
+	std::map< std::string, Track > tracks;
+	std::ifstream file( path );
+	if( !file )
+	{
+		error = "cannot open " + path;
+		return tracks;
+	}
+
+	std::string line;
+	int lineNumber = 0;
+	while( std::getline( file, line ) )
+	{
+		++lineNumber;
+		const size_t hash = line.find( '#' );
+		if( hash != std::string::npos )
+			line.erase( hash );
+		std::istringstream in( line );
+
+		int frame = 0;
+		if( !( in >> frame ) )
+			continue;//blank or comment
+
+		//The name is everything up to the last token, because parameters have
+		//spaces in them ("Ch1 Mark-Space") and a value never does.
+		std::vector< std::string > words;
+		std::string word;
+		while( in >> word )
+			words.push_back( word );
+
+		if( words.empty() )
+		{
+			error = path + ":" + std::to_string( lineNumber ) + ": expected `frame Parameter Name value`";
+			return {};
+		}
+
+		std::string name;
+		float value = 0.0f;
+
+		const size_t equals = words.back().find( '=' );
+		if( words.size() == 1 || equals != std::string::npos )
+		{
+			//`Name=value`, possibly with the name's own spaces ahead of it.
+			if( equals == std::string::npos )
+			{
+				error = path + ":" + std::to_string( lineNumber ) + ": expected `frame Parameter Name value`";
+				return {};
+			}
+			value = std::strtof( words.back().substr( equals + 1 ).c_str(), nullptr );
+			words.back().erase( equals );
+			for( const std::string& part : words )
+			{
+				if( part.empty() )
+					continue;
+				name += name.empty() ? part : " " + part;
+			}
+		}
+		else
+		{
+			value = std::strtof( words.back().c_str(), nullptr );
+			words.pop_back();
+			for( const std::string& part : words )
+				name += name.empty() ? part : " " + part;
+		}
+
+		if( name.empty() )
+		{
+			error = path + ":" + std::to_string( lineNumber ) + ": expected `frame Parameter Name value`";
+			return {};
+		}
+
+		tracks[ name ].emplace_back( frame, value );
+	}
+
+	for( auto& entry : tracks )
+		std::sort( entry.second.begin(), entry.second.end() );
+	return tracks;
+}
+
+float valueAt( const Track& track, int frame )
+{
+	if( track.empty() )
+		return 0.0f;
+	if( frame <= track.front().first )
+		return track.front().second;
+	if( frame >= track.back().first )
+		return track.back().second;
+
+	for( size_t i = 1; i < track.size(); ++i )
+	{
+		if( frame <= track[ i ].first )
+		{
+			const auto& a    = track[ i - 1 ];
+			const auto& b    = track[ i ];
+			const float span = static_cast< float >( b.first - a.first );
+			const float t    = span > 0.0f ? ( static_cast< float >( frame - a.first ) / span ) : 1.0f;
+			return a.second + ( b.second - a.second ) * t;
+		}
+	}
+	return track.back().second;
+}
+
+struct PipeOptions
+{
+	int width   = 1920;
+	int height  = 1080;
+	int frames  = 0;   ///< 0 means "until the reader hangs up".
+	double fps  = 60.0;
+	int preset  = 0;
+	float audio = -1.0f;
+	std::string scriptPath;
+	std::vector< std::pair< std::string, float > > sets;
+};
+
+int runPipe( const PipeOptions& options )
+{
+	//A reader that stops early -- `head -c`, ffmpeg hitting its own -t, a
+	//pipeline the operator interrupted -- would otherwise kill this process
+	//with SIGPIPE before it could shut the plugin down. Ignored, so the write
+	//returns EPIPE and the loop ends the ordinary way.
+	std::signal( SIGPIPE, SIG_IGN );
+
+	AstablePlugin plugin;
+	if( options.preset > 0 )
+		plugin.SetFloatParameter( PT_PRESET, static_cast< float >( options.preset ) );
+	int failures = applySets( plugin, options.sets );
+	if( options.audio >= 0.0f )
+		plugin.SetAudioForTest( options.audio );
+	if( failures > 0 )
+		return failures;
+
+	//Resolve the script's names to ids once, up front, and refuse a name that
+	//is not a parameter.
+	std::map< unsigned int, Track > automation;
+	if( !options.scriptPath.empty() )
+	{
+		std::string error;
+		const std::map< std::string, Track > tracks = loadScript( options.scriptPath, error );
+		if( !error.empty() )
+		{
+			std::fprintf( stderr, "attest: %s\n", error.c_str() );
+			return 1;
+		}
+
+		const std::map< std::string, unsigned int > byName = parameterIndex( plugin );
+		for( const auto& entry : tracks )
+		{
+			const auto found = byName.find( entry.first );
+			if( found == byName.end() )
+			{
+				std::fprintf( stderr, "attest: the script names \"%s\", which is not a parameter (try --list)\n",
+				              entry.first.c_str() );
+				return 1;
+			}
+			automation[ found->second ] = entry.second;
+		}
+	}
+
+	Target target = makeTarget( options.width, options.height, false );
+	if( !startPlugin( plugin, target ) )
+	{
+		std::fprintf( stderr, "attest: InitGL failed\n" );
+		releaseTarget( target );
+		return 1;
+	}
+
+	const double frameSeconds = options.fps > 0.0 ? 1.0 / options.fps : kFrameSeconds;
+
+	for( int index = 0; options.frames <= 0 || index < options.frames; ++index )
+	{
+		for( const auto& track : automation )
+			plugin.SetFloatParameter( track.first, valueAt( track.second, index ) );
+
+		if( !renderFrame( plugin, target, index, frameSeconds ) )
+		{
+			std::fprintf( stderr, "attest: ProcessOpenGL failed on frame %d\n", index );
+			++failures;
+			break;
+		}
+
+		//Top row first on the way out, because that is what a raw RGBA stream
+		//is and GL hands back bottom row first.
+		const std::vector< unsigned char > out = flipRows( readBytes( target ), options.width, options.height );
+
+		size_t written = 0;
+		bool hungUp    = false;
+		while( written < out.size() )
+		{
+			const ssize_t put = write( STDOUT_FILENO, out.data() + written, out.size() - written );
+			if( put <= 0 )
+			{
+				hungUp = true;
+				break;
+			}
+			written += static_cast< size_t >( put );
+		}
+		if( hungUp )
+			break;
+	}
+
+	plugin.DeInitGL();
+	releaseTarget( target );
+	return failures;
+}
+
 void usage()
 {
 	std::printf(
@@ -1587,11 +1847,19 @@ void usage()
 		"\n"
 		"  --out PATH          render one frame to a PNG\n"
 		"  --size WxH          the raster (default 1920x1080)\n"
-		"  --frames N          frames to render before capturing the last (default 8)\n"
+		"  --width N           the raster's width, as an alternative to --size\n"
+		"  --height N          the raster's height\n"
+		"  --frames N          frames to render before capturing the last (default 8);\n"
+		"                      with --pipe, how many to write (default: until the reader stops)\n"
 		"  --preset N          apply factory preset N (1 .. %d)\n"
 		"  --set NAME=VALUE    set a parameter, by id or by name (repeatable)\n"
 		"  --audio L           a flat spectrum whose folded level is L (0..1)\n"
-		"  --list              every parameter: id, name, type, current value, range, display\n",
+		"  --list              every parameter: id, name, type, current value, range, display\n"
+		"\n"
+		"  --pipe              raw RGBA frames on stdout. A SOURCE reads nothing, so there is\n"
+		"                      no stdin side:  attest --pipe --width 1920 --height 1080 |  ffmpeg ...\n"
+		"  --fps N             the synthetic frame rate --pipe advances at (default 60)\n"
+		"  --script PATH       parameter cues for --pipe: `frame  Parameter Name  value`\n",
 		presets::kCount );
 }
 } // namespace
@@ -1606,10 +1874,18 @@ int main( int argc, char** argv )
 	int frames = 8;
 	int preset = 0;
 	float audio = -1.0f;
+	double fps  = 60.0;
+	std::string scriptPath;
+
+	//`--frames` means two different things and only one of them has a sane
+	//default. For a still it is "settle for this many"; for --pipe it is the
+	//length of the take, and 8 frames of video is not a default anybody wants.
+	//So an unasked-for --frames leaves --pipe running until its reader stops.
+	bool framesGiven = false;
 
 	bool doList = false, doNames = false, doDefaults = false;
 	bool doPeriod = false, doSwing = false, doMarkSpace = false, doDots = false, doYoke = false;
-	bool doEnergy = false, doPresets = false, doBench = false;
+	bool doEnergy = false, doPresets = false, doBench = false, doPipe = false;
 
 	for( int i = 1; i < argc; ++i )
 	{
@@ -1617,7 +1893,12 @@ int main( int argc, char** argv )
 		auto next             = [ & ]() -> std::string { return ( i + 1 < argc ) ? argv[ ++i ] : std::string(); };
 
 		if( arg == "--out" ) outPath = next();
-		else if( arg == "--frames" ) frames = std::atoi( next().c_str() );
+		else if( arg == "--frames" ) { frames = std::atoi( next().c_str() ); framesGiven = true; }
+		else if( arg == "--width" ) width = std::atoi( next().c_str() );
+		else if( arg == "--height" ) height = std::atoi( next().c_str() );
+		else if( arg == "--fps" ) fps = std::atof( next().c_str() );
+		else if( arg == "--script" ) scriptPath = next();
+		else if( arg == "--pipe" ) doPipe = true;
 		else if( arg == "--preset" ) preset = std::atoi( next().c_str() );
 		else if( arg == "--audio" ) audio = static_cast< float >( std::atof( next().c_str() ) );
 		else if( arg == "--list" ) doList = true;
@@ -1658,7 +1939,7 @@ int main( int argc, char** argv )
 		}
 	}
 
-	const bool anyGL = doDots || doEnergy || doPresets || doBench || !outPath.empty();
+	const bool anyGL = doDots || doEnergy || doPresets || doBench || doPipe || !outPath.empty();
 	const bool any   = anyGL || doList || doNames || doDefaults || doPeriod || doSwing || doMarkSpace || doYoke;
 	if( !any )
 	{
@@ -1666,8 +1947,21 @@ int main( int argc, char** argv )
 		return 1;
 	}
 
+	if( doPipe && ( width <= 0 || height <= 0 ) )
+	{
+		std::fprintf( stderr, "attest: --pipe needs a positive --width and --height\n" );
+		return 1;
+	}
+
 	//Line-buffered, so a failure on stderr appears where it happened.
-	std::setvbuf( stdout, nullptr, _IOLBF, 0 );
+	//
+	//Except under --pipe, where stdout is the video. Buffering is left alone
+	//there and nothing below prints to it -- a single line of "wrote ..." in
+	//the middle of a raw RGBA stream is four hundred bytes of green noise
+	//somewhere near the top of one frame, which is very hard to recognise for
+	//what it is.
+	if( !doPipe )
+		std::setvbuf( stdout, nullptr, _IOLBF, 0 );
 
 	int failures = 0;
 
@@ -1706,6 +2000,20 @@ int main( int argc, char** argv )
 		failures += checkPresets();
 	if( doBench )
 		failures += runBenchmark();
+
+	if( doPipe )
+	{
+		PipeOptions options;
+		options.width      = width;
+		options.height     = height;
+		options.frames     = framesGiven ? frames : 0;
+		options.fps        = fps;
+		options.preset     = preset;
+		options.audio      = audio;
+		options.scriptPath = scriptPath;
+		options.sets       = sets;
+		failures += runPipe( options );
+	}
 
 	if( !outPath.empty() )
 	{

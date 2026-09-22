@@ -211,13 +211,14 @@ until the reader stops.
 
 **v0.1.0, and honestly early.** Dated 2026-09-21.
 
-**Verified on this machine** (M4 Max, macOS 26.4), all 23 checks in
+**Verified on this machine** (M4 Max, macOS 26.4), all 24 checks in
 `tools/verify.sh`:
 
 | check | what it establishes |
 |---|---|
 | `--period` | ten (Ra, Rb, C) triples from 120 Hz to 34 kHz: period and duty both within **0.01%** of the datasheet formula, measured from the edges the yoke sees. The part extremes (2.08 µs and 208 s periods) are exact against the flip-flop's own clock, including one driven at 0.80 samples per period |
 | `--swing` | the capacitor runs between V5/2 and V5 within **0.04%**, at rest and with pin 5 driven up and down |
+| `--recover` | a channel whose pin 5 has been driven for three seconds — sine and square, either side of its own rate, to full depth — is back at the datasheet period within **0.000%** once the CV is removed or pin 4 is pulsed, measured from edges counted afterwards |
 | `--markspace` | the duty goes 26% → 89% while the period holds to **0.000%** |
 | `--dots` | **100%** of a frame's light in four spots, accumulated over one 7.4 Hz beat |
 | `--yoke` | a 2 ms coil's fitted time constant is **0.44%** out, and the trace is at **63.40%** one τ after the step |

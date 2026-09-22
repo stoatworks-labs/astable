@@ -23,6 +23,19 @@ a Resolume screen capture. Real frames through the real shipped plugin class.
 The figure is brightest at its turnarounds because that is where the beam is
 slowest; the yellow trailing edge is P4's slow layer.</sub>
 
+## Watch it
+
+[![Astable — six 555 timers into a television's deflection yoke](docs/video-thumb.png)](https://www.youtube.com/watch?v=hHC2vN2kp98)
+
+[**Astable — six 555 timers into a television's yoke**](https://www.youtube.com/watch?v=hHC2vN2kp98)
+(51 seconds). The four dwell dots two square waves make, an RC stretching them
+into lines, the capacitors bending every edge into a curve, the figure precessing
+and breathing because nothing is phase-locked, the yoke's inductance rounding the
+corners off, and the raster. Every frame is the real plugin: an FFGL source has
+no window, so the footage is rendered by this repository's own `attest --pipe`
+harness rather than screen recorded, from the same class Resolume loads — and it
+reads no clip, because a source generates its own picture.
+
 **[Try it in your browser](https://astable-demo.stoatworks-labs.com)** — the
 plugin's own shaders ported to WebGL2 over a JavaScript port of the 555 engine,
 with every control and every preset. It is a port and not the plugin: read what
@@ -263,8 +276,8 @@ from **Mesa llvmpipe** dropped in beside Arena: the plugin reported
   harness's injected flat spectrum, so the bin count and the `sqrt` on the
   magnitudes are taken from the fleet's other plugins rather than measured here.
   Resolume's 64-bin FFT mapping remains an assumption.
-- No user guide, no OpenFX port and no browser demo — none of them in scope for
-  0.1.0.
+- No user guide and no OpenFX port — neither in scope for 0.1.0. The browser
+  demo was on this list too and has since shipped; it is linked at the top.
 - `ATTRIBUTIONS.md` is still a provisional hand copy in the shape the fleet's
   sync scripts generate. `source/StoatworksAbout.h` is not: it is generated from
   the project's registration, and hand-editing it will be overwritten.

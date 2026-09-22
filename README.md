@@ -25,17 +25,18 @@ slowest; the yellow trailing edge is P4's slow layer.</sub>
 
 ## Watch it
 
-[![Astable — six 555 timers into a television's deflection yoke](docs/video-thumb.png)](https://www.youtube.com/watch?v=GfFGbzhFzpU)
+[![Astable — six 555 timers into a television's deflection yoke](docs/video-thumb.png)](https://www.youtube.com/watch?v=esjDxRNtgLs)
 
-[**Astable — six 555 timers into a television's yoke**](https://www.youtube.com/watch?v=GfFGbzhFzpU)
-(64 seconds). The four dwell dots two square waves make, an RC stretching them
-into lines, the capacitors bending every edge into a curve, the figure precessing
-and breathing because nothing is phase-locked, the yoke's inductance rounding the
-corners off, one timer's capacitor on another's pin 5 sweeping first the frequency
-and then the dwell, and the raster. Every frame is the real plugin: an FFGL source has
-no window, so the footage is rendered by this repository's own `attest --pipe`
-harness rather than screen recorded, from the same class Resolume loads — and it
-reads no clip, because a source generates its own picture.
+[**Astable — six 555 timers into a television's yoke**](https://www.youtube.com/watch?v=esjDxRNtgLs)
+(55 seconds). Seven presets, seven beats, in the order they sit in the dropdown:
+the four dwell dots two square waves make, an RC stretching them into lines, the
+capacitors bending every edge into a curve, the figure precessing and breathing
+because nothing is phase-locked, one timer's capacitor on another's pin 5
+sweeping first the frequency and then the dwell, and the raster. Every frame is
+the real plugin: an FFGL source has no window, so the footage is rendered by this
+repository's own `attest --pipe` harness rather than screen recorded, from the
+same class Resolume loads — and it reads no clip, because a source generates its
+own picture.
 
 **[Try it in your browser](https://astable-demo.stoatworks-labs.com)** — the
 plugin's own shaders ported to WebGL2 over a JavaScript port of the 555 engine,
@@ -209,7 +210,7 @@ until the reader stops.
 
 ## Status
 
-**v0.1.0, and honestly early.** Dated 2026-09-21.
+**v0.1.1, and honestly early.** Dated 2026-09-22.
 
 **Verified on this machine** (M4 Max, macOS 26.4), all 24 checks in
 `tools/verify.sh`:
@@ -278,7 +279,7 @@ from **Mesa llvmpipe** dropped in beside Arena: the plugin reported
   harness's injected flat spectrum, so the bin count and the `sqrt` on the
   magnitudes are taken from the fleet's other plugins rather than measured here.
   Resolume's 64-bin FFT mapping remains an assumption.
-- No user guide and no OpenFX port — neither in scope for 0.1.0. The browser
+- No user guide and no OpenFX port — neither in scope for 0.1.1. The browser
   demo was on this list too and has since shipped; it is linked at the top.
 - `ATTRIBUTIONS.md` is still a provisional hand copy in the shape the fleet's
   sync scripts generate. `source/StoatworksAbout.h` is not: it is generated from

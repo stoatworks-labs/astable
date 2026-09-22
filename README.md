@@ -25,13 +25,14 @@ slowest; the yellow trailing edge is P4's slow layer.</sub>
 
 ## Watch it
 
-[![Astable — six 555 timers into a television's deflection yoke](docs/video-thumb.png)](https://www.youtube.com/watch?v=hHC2vN2kp98)
+[![Astable — six 555 timers into a television's deflection yoke](docs/video-thumb.png)](https://www.youtube.com/watch?v=GfFGbzhFzpU)
 
-[**Astable — six 555 timers into a television's yoke**](https://www.youtube.com/watch?v=hHC2vN2kp98)
-(51 seconds). The four dwell dots two square waves make, an RC stretching them
+[**Astable — six 555 timers into a television's yoke**](https://www.youtube.com/watch?v=GfFGbzhFzpU)
+(64 seconds). The four dwell dots two square waves make, an RC stretching them
 into lines, the capacitors bending every edge into a curve, the figure precessing
 and breathing because nothing is phase-locked, the yoke's inductance rounding the
-corners off, and the raster. Every frame is the real plugin: an FFGL source has
+corners off, one timer's capacitor on another's pin 5 sweeping first the frequency
+and then the dwell, and the raster. Every frame is the real plugin: an FFGL source has
 no window, so the footage is rendered by this repository's own `attest --pipe`
 harness rather than screen recorded, from the same class Resolume loads — and it
 reads no clip, because a source generates its own picture.

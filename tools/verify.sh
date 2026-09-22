@@ -256,7 +256,7 @@ head_ "The circuit, and the picture"
 # These are the point of the harness: they turn "this is a 555, not a square
 # wave generator" from a sentence in AGENTS.md into something a machine checks.
 if [ -x build/attest ]; then
-    for test in period swing markspace yoke dots energy presets defaults names; do
+    for test in period swing recover markspace yoke dots energy presets defaults names; do
         log="/tmp/astable-$test.log"
         if ./build/attest "--$test" >"$log" 2>&1; then
             ok "attest --$test"

@@ -97,11 +97,30 @@ void Timer555::Step( double dt, double vControl )
 		//crossed at t = tau ln((vc - target) / (level - target)). The ratio is
 		//positive whenever the level lies between vc and the target, which is
 		//the only case in which the crossing exists at all.
+		//
+		//Both comparators are LEVEL comparators, not edge detectors, and that
+		//distinction is the whole of what pin 5 can do to this loop. A moving
+		//V5 can put a level on the far side of the capacitor between one
+		//interval and the next -- CV pulling the threshold down under an
+		//already-charged C, or pushing the trigger up over an already-drained
+		//one -- and the part flips the instant that happens, because the
+		//comparator is looking at where the capacitor IS and not at where it
+		//has been. Solving for a crossing alone cannot see that: the crossing
+		//is in the past, so `reaches` is false, so the capacitor spends the
+		//whole interval relaxing toward the rail it was already heading for,
+		//and the next interval asks the same question and gets the same
+		//answer. That is a latch for the life of the instance, and pin 4 is
+		//the other half of it rather than the escape -- a reset drains C to
+		//ground, which is BELOW the trigger, so the set comparator is then
+		//stuck in exactly the same way the threshold one was.
+		const bool already = high ? ( vc >= level ) : ( vc <= level );
+
 		const double num   = vc - target;
 		const double den   = level - target;
-		const bool reaches = ( high ? ( vc < level && level < target ) : ( vc > level && level > target ) )
-		                     && num / den > 1.0;
-		const double tCross = reaches ? tau * std::log( num / den ) : -1.0;
+		const bool reaches = already
+		                     || ( ( high ? ( vc < level && level < target ) : ( vc > level && level > target ) )
+		                          && num / den > 1.0 );
+		const double tCross = already ? 0.0 : ( reaches ? tau * std::log( num / den ) : -1.0 );
 
 		if( !reaches || tCross >= remaining )
 		{
@@ -111,8 +130,12 @@ void Timer555::Step( double dt, double vControl )
 			break;
 		}
 
-		//Land exactly on the level, at the exact time, and flip.
-		vc = level;
+		//Land exactly on the level, at the exact time, and flip. A capacitor
+		//that was already past the level stays where it is: the comparator
+		//moved to meet it, so there is no crossing to land on, and pulling vc
+		//back to the level would be inventing charge the circuit never lost.
+		if( !already )
+			vc = level;
 		now += tCross;
 		remaining -= tCross;
 

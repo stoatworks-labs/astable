@@ -41,13 +41,15 @@ jobs:
         run: cmake --build build --config Release --parallel
 
       - name: The circuit
-        # Deterministic, and four of these need no GPU at all: the 555 model,
-        # the capacitor swing, the mark/space pot and the yoke's time constant
-        # are pure CPU. The three that do render need only the software
-        # rasteriser the runner has.
+        # Deterministic, and five of these need no GPU at all: the 555 model,
+        # the capacitor swing, the recovery of a channel whose pin 5 has been
+        # driven, the mark/space pot and the yoke's time constant are pure CPU.
+        # The three that do render need only the software rasteriser the runner
+        # has.
         run: |
           ./build/attest --period
           ./build/attest --swing
+          ./build/attest --recover
           ./build/attest --markspace
           ./build/attest --yoke
           ./build/attest --defaults

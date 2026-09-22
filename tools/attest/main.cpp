@@ -13,6 +13,8 @@
                      duty = (Ra + Rb) / (Ra + 2Rb), both within 1%
         --swing      the capacitor runs between V5/2 and V5 within 1%, with
                      V5 at rest (2/3 Vcc) and driven
+        --recover    a channel whose pin 5 has been driven comes back at the
+                     datasheet period once the CV is removed, or pin 4 pulsed
         --markspace  Mark-Space moves the duty and holds the period within 0.5%
         --dots       two squares into X and Y: >90% of the light in four spots
         --yoke       a step into a coil with time constant tau is the exponential
@@ -780,6 +782,251 @@ int checkSwing()
 	}
 
 	std::printf( failures == 0 ? "swing: ok\n" : "swing: %d FAILED\n", failures );
+	return failures;
+}
+
+//---------------------------------------------------------------------------
+// --recover
+//---------------------------------------------------------------------------
+//
+// The check `--swing` cannot make. Swing holds pin 5 at a FIXED voltage and
+// starts from Reset(), so the comparator levels are already on the far side of
+// the capacitor from the rail it is heading for, and they stay there. Nothing
+// in it ever moves a level ACROSS the capacitor -- which is the one thing a
+// control voltage does that a bias does not, and it was the whole of the bug:
+// a threshold pulled down under an already-charged C, or a trigger pushed up
+// over an already-drained one, left the part with no crossing to solve for and
+// it sat on the rail until the instance was destroyed. Removing the CV did not
+// help, because the capacitor was still on the wrong side. Pin 4 did not help
+// either, because a reset drains C to ground, which is below the trigger.
+//
+// So: drive pin 5 hard for three seconds, take it away, and require the part
+// to be oscillating at the datasheet period again. Measured from edges counted
+// AFTER the CV is removed, never from LastPeriod alone -- a latched timer
+// keeps reporting whatever its last complete cycle was, so a stale reading is
+// exactly what this has to be able to tell from a live one.
+int checkRecover()
+{
+	constexpr double kVcc  = 9.0;
+	constexpr double kRest = kVcc * 2.0 / 3.0;
+	const double ra = 10e3, rb = 4.7e3, c = 100e-9;
+	const double want = NominalPeriod( ra, rb, c );
+
+	//Seconds, in the simulation's own time.
+	constexpr double kDrive   = 3.0;
+	constexpr double kSettle  = 0.5;
+	constexpr double kMeasure = 1.0;
+
+	enum Shape { kSine, kSquare };
+	enum Release { kRemove, kResetPin };
+
+	struct Case
+	{
+		const char* label;
+		Shape shape;
+		double ratio;///< The modulation rate as a multiple of the timer's own.
+		double depth;
+		Release release;
+	};
+
+	//Rates either side of the timer's own, because which side decides whether
+	//a level sweeps past the capacitor or the capacitor sweeps past the level,
+	//and both of them latched. Depths are the range the report came in at,
+	//plus a full-depth case that the clamp has to survive.
+	const Case cases[] = {
+		{ "sine  0.01x, depth 0.12", kSine, 0.01, 0.12, kRemove },
+		{ "sine  0.20x, depth 0.22", kSine, 0.20, 0.22, kRemove },
+		{ "sine  1.30x, depth 0.04", kSine, 1.30, 0.04, kRemove },
+		{ "sine 11.00x, depth 1.00", kSine, 11.00, 1.00, kRemove },
+		{ "sq    0.20x, depth 0.12", kSquare, 0.20, 0.12, kRemove },
+		{ "sq    1.30x, depth 0.45", kSquare, 1.30, 0.45, kRemove },
+		{ "sq   11.00x, depth 1.00", kSquare, 11.00, 1.00, kRemove },
+		{ "sine  0.20x, depth 0.22, pin 4", kSine, 0.20, 0.22, kResetPin },
+		{ "sq    1.30x, depth 0.45, pin 4", kSquare, 1.30, 0.45, kResetPin },
+	};
+
+	std::printf( "  Vcc = %.1f V, Ra = 10 kR, Rb = 4.7 kR, C = 100 nF -- a %.4f ms part at %.1f Hz.\n"
+	             "  Pin 5 is driven for %.0f s exactly as Bench::ControlVoltage drives it, then either\n"
+	             "  released to 2/3 Vcc or pulsed on pin 4, and the period is re-measured from rising\n"
+	             "  edges counted in the %.1f s AFTER that. Tolerance 1%%.\n\n",
+	             kVcc, want * 1e3, 1.0 / want, kDrive, kMeasure );
+
+	const double dt = want / Bench::kSamplesPerPeriod;
+	int failures    = 0;
+
+	for( const Case& cs : cases )
+	{
+		Timer555 timer;
+		Timer555::Params tp;
+		tp.rCharge    = ra + rb;
+		tp.rDischarge = rb;
+		tp.c          = c;
+		tp.vcc        = kVcc;
+		timer.SetParams( tp );
+		timer.Reset();
+
+		//-- drive -----------------------------------------------------------
+		const double modHz = cs.ratio / want;
+		const long driven  = static_cast< long >( kDrive / dt );
+		for( long i = 0; i < driven; ++i )
+		{
+			const double t = static_cast< double >( i ) * dt;
+			const double phase = modHz * t;
+			const double s = cs.shape == kSine ? std::sin( 6.283185307179586 * phase )
+			                                   : ( std::fmod( phase, 1.0 ) < 0.5 ? 1.0 : -1.0 );
+			//The formula from Bench::ControlVoltage, including its 0.45.
+			timer.Step( dt, kRest * ( 1.0 + 0.45 * cs.depth * s ) );
+		}
+
+		//-- release ----------------------------------------------------------
+		if( cs.release == kResetPin )
+		{
+			//Pin 4 low for a millisecond, then high again, with pin 5 already
+			//back at rest. The operator's "have you tried resetting it".
+			tp.reset = false;
+			timer.SetParams( tp );
+			for( long i = 0; i < static_cast< long >( 1e-3 / dt ); ++i )
+				timer.Step( dt, kRest );
+			tp.reset = true;
+			timer.SetParams( tp );
+		}
+
+		for( long i = 0; i < static_cast< long >( kSettle / dt ); ++i )
+			timer.Step( dt, kRest );
+
+		//-- measure -----------------------------------------------------------
+		const long window = static_cast< long >( kMeasure / dt );
+		bool wasHigh      = timer.High();
+		long firstEdge = -1, lastEdge = -1;
+		long edges = 0;
+		for( long i = 0; i < window; ++i )
+		{
+			timer.Step( dt, kRest );
+			const bool isHigh = timer.High();
+			if( isHigh && !wasHigh )
+			{
+				if( firstEdge < 0 )
+					firstEdge = i;
+				lastEdge = i;
+				++edges;
+			}
+			wasHigh = isHigh;
+		}
+
+		const bool alive = edges >= 2;
+		//Averaged over every cycle in the window, so the sample quantisation on
+		//the two end edges is divided by the cycle count and does not show.
+		const double measured = alive ? static_cast< double >( lastEdge - firstEdge ) * dt
+		                                  / static_cast< double >( edges - 1 )
+		                              : 0.0;
+		const double err   = alive ? ( measured / want - 1.0 ) * 100.0 : 0.0;
+		const double latch = timer.LastPeriod();
+
+		if( alive )
+			std::printf( "  %-32s %5ld edges   %.4f ms (%+.3f%%)   flip-flop %.4f ms\n",
+			             cs.label, edges, measured * 1e3, err, latch * 1e3 );
+		else
+			std::printf( "  %-32s %5ld edges   LATCHED -- C at %.4f V, output %s, flip-flop still says %.4f ms\n",
+			             cs.label, edges, timer.Cap(), timer.High() ? "high" : "low", latch * 1e3 );
+
+		if( !alive )
+		{
+			std::fprintf( stderr, "recover: %s did not restart: %ld edges in %.1f s\n", cs.label, edges, kMeasure );
+			++failures;
+		}
+		else if( std::fabs( err ) > 1.0 )
+		{
+			std::fprintf( stderr, "recover: %s came back at %+.3f%% of the datasheet period\n", cs.label, err );
+			++failures;
+		}
+	}
+
+	//-- and now the patch an operator actually builds -------------------------
+	//
+	// Through Bench, so Controls.cpp's mapping and Bench::ControlVoltage are
+	// both in the path: channel 1's pin 5 from channel 4's capacitor at a depth
+	// in the middle of the reported range, then the depth taken back to zero on
+	// a RUNNING bench -- which is what a preset change does, and what the
+	// report says never recovered.
+	{
+		BenchParams bp = Resolve( defaultParams().data(), 0.0f ).bench;
+		for( int i = 0; i < kChannels; ++i )
+		{
+			bp.channel[ i ].cvSource = 0;
+			bp.channel[ i ].cvDepth  = 0.0f;
+		}
+		//kCvSourceNames[ 10 ] is "Ch4 Cap"; asserted rather than assumed,
+		//because the list is allowed to grow and this index would move.
+		if( std::string( kCvSourceNames[ 10 ] ) != "Ch4 Cap" )
+		{
+			std::fprintf( stderr, "recover: kCvSourceNames[10] is \"%s\", not \"Ch4 Cap\"\n", kCvSourceNames[ 10 ] );
+			++failures;
+		}
+		bp.channel[ 0 ].cvSource = 10;
+		bp.channel[ 0 ].cvDepth  = 0.12f;
+
+		const double nominal = bp.channel[ 0 ].nominalPeriod;
+
+		Bench bench;
+		bench.Prepare();
+		bench.SetParams( bp );
+
+		//The capacitor's excursion, sampled once a frame. At 60 Hz against a
+		//744 Hz timer this aliases all over the cycle, which is all it has to
+		//do: a channel that is oscillating visits Vcc/3 .. 2Vcc/3 within a few
+		//frames and a latched one sits on a rail and reports nothing. This is
+		//the assertion that does not depend on LastPeriod, which a latched
+		//timer goes on reporting from the last cycle it completed and which is
+		//therefore only ever corroborating evidence here.
+		double capLo = 1e9, capHi = -1e9;
+		auto run = [ & ]( double seconds, bool watch ) {
+			const int n = std::clamp( static_cast< int >( std::lround( kFrameSeconds * bench.SampleRate() ) ), 2, kMaxBlock );
+			for( int f = 0; f < static_cast< int >( seconds / kFrameSeconds ); ++f )
+			{
+				bench.Render( n, kFrameSeconds );
+				if( watch )
+				{
+					capLo = std::min( capLo, bench.Timer( 0 ).Cap() );
+					capHi = std::max( capHi, bench.Timer( 0 ).Cap() );
+				}
+			}
+		};
+
+		run( 3.0, false );
+		const double driven = bench.Timer( 0 ).LastPeriod();
+
+		//Depth to zero, nothing else touched. SetParams must not restart the
+		//timers, so this is the CV being removed from a running circuit.
+		bp.channel[ 0 ].cvDepth = 0.0f;
+		bench.SetParams( bp );
+		run( 0.5, false );
+		run( 3.0, true );
+
+		const double back  = bench.Timer( 0 ).LastPeriod();
+		const double err   = ( back / nominal - 1.0 ) * 100.0;
+		const double vcc   = bp.channel[ 0 ].vcc;
+		//Pin 5 is back at rest, so the run is Vcc/3 .. 2Vcc/3. Nine tenths of
+		//it, to leave room for the frame sampling missing the very extremes.
+		const double wantSpan = 0.9 * vcc / 3.0;
+		const double span     = capHi - capLo;
+		std::printf( "\n  Ch1 CV from Ch4 Cap at 0.12, then back to 0 on a running bench:\n"
+		             "    datasheet %.4f ms   while driven %.4f ms   after %.4f ms (%+.3f%%)\n"
+		             "    C over the 3 s after: %.4f .. %.4f V, a %.4f V run (want >= %.4f)\n",
+		             nominal * 1e3, driven * 1e3, back * 1e3, err, capLo, capHi, span, wantSpan );
+		if( span < wantSpan )
+		{
+			std::fprintf( stderr, "recover: channel 1 is not oscillating after the CV was removed:"
+			                      " C sat in %.4f .. %.4f V\n", capLo, capHi );
+			++failures;
+		}
+		else if( std::fabs( err ) > 1.0 )
+		{
+			std::fprintf( stderr, "recover: channel 1 came back at %+.3f%% of the datasheet period\n", err );
+			++failures;
+		}
+	}
+
+	std::printf( failures == 0 ? "recover: ok\n" : "recover: %d FAILED\n", failures );
 	return failures;
 }
 
@@ -1835,6 +2082,7 @@ void usage()
 		"\n"
 		"  --period            period = 0.693 (Ra + 2Rb) C, duty = (Ra + Rb) / (Ra + 2Rb), within 1%%\n"
 		"  --swing             the capacitor runs between V5/2 and V5 within 1%%\n"
+		"  --recover           a channel driven on pin 5 comes back when the CV is removed\n"
 		"  --markspace         Mark-Space moves the duty and holds the period within 0.5%%\n"
 		"  --dots              two squares into X and Y: >90%% of the light in four spots\n"
 		"  --yoke              a step into a coil is an exponential of the right tau\n"
@@ -1885,6 +2133,7 @@ int main( int argc, char** argv )
 
 	bool doList = false, doNames = false, doDefaults = false;
 	bool doPeriod = false, doSwing = false, doMarkSpace = false, doDots = false, doYoke = false;
+	bool doRecover = false;
 	bool doEnergy = false, doPresets = false, doBench = false, doPipe = false;
 
 	for( int i = 1; i < argc; ++i )
@@ -1906,6 +2155,7 @@ int main( int argc, char** argv )
 		else if( arg == "--defaults" ) doDefaults = true;
 		else if( arg == "--period" ) doPeriod = true;
 		else if( arg == "--swing" ) doSwing = true;
+		else if( arg == "--recover" ) doRecover = true;
 		else if( arg == "--markspace" ) doMarkSpace = true;
 		else if( arg == "--dots" ) doDots = true;
 		else if( arg == "--yoke" ) doYoke = true;
@@ -1913,7 +2163,7 @@ int main( int argc, char** argv )
 		else if( arg == "--presets" ) doPresets = true;
 		else if( arg == "--bench" ) doBench = true;
 		else if( arg == "--all" )
-			doNames = doDefaults = doPeriod = doSwing = doMarkSpace = doDots = doYoke = doEnergy = doPresets = true;
+			doNames = doDefaults = doPeriod = doSwing = doRecover = doMarkSpace = doDots = doYoke = doEnergy = doPresets = true;
 		else if( arg == "--size" )
 		{
 			const std::string value = next();
@@ -1940,7 +2190,7 @@ int main( int argc, char** argv )
 	}
 
 	const bool anyGL = doDots || doEnergy || doPresets || doBench || doPipe || !outPath.empty();
-	const bool any   = anyGL || doList || doNames || doDefaults || doPeriod || doSwing || doMarkSpace || doYoke;
+	const bool any   = anyGL || doList || doNames || doDefaults || doPeriod || doSwing || doRecover || doMarkSpace || doYoke;
 	if( !any )
 	{
 		usage();
@@ -1976,6 +2226,8 @@ int main( int argc, char** argv )
 		failures += checkPeriod();
 	if( doSwing )
 		failures += checkSwing();
+	if( doRecover )
+		failures += checkRecover();
 	if( doMarkSpace )
 		failures += checkMarkSpace();
 	if( doYoke )
@@ -2059,7 +2311,7 @@ int main( int argc, char** argv )
 		releaseTarget( target );
 	}
 
-	if( doNames && doDefaults && doPeriod && doSwing && doMarkSpace && doDots && doYoke && doEnergy && doPresets )
+	if( doNames && doDefaults && doPeriod && doSwing && doRecover && doMarkSpace && doDots && doYoke && doEnergy && doPresets )
 		std::printf( "\n%s\n", failures == 0 ? "all checks passed" : "SOME CHECKS FAILED" );
 
 	if( context != nullptr )

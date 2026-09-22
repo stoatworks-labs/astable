@@ -39,6 +39,18 @@ namespace astable
 	never accumulates an error and two channels beat at the rate their parts
 	say they should.
 
+	Solving for a crossing is not the same as waiting for one, and pin 5 is
+	where the difference shows. A control voltage moves the comparator levels
+	between one interval and the next, and it can move one of them straight
+	past the capacitor: the threshold pulled down under an already-charged C,
+	or the trigger pushed up over an already-drained one. The crossing is then
+	in the past and there is no future one to solve for -- but the comparators
+	are level comparators, so the part flips immediately, and `Step` does the
+	same. Miss that and the channel latches on the rail it was heading for and
+	stays there for the life of the instance, with pin 4 no escape: a reset
+	drains C below the trigger, which is the same trap the other way up. See
+	`attest --recover`.
+
 	## The output stage
 
 	A bipolar 555 swings from about 0.1 V to Vcc - 1.7 V, not rail to rail, and

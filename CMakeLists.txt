@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(Astable VERSION 0.1.0 LANGUAGES CXX)
+project(Astable VERSION 0.1.1 LANGUAGES CXX)
 
 #-----------------------------------------------------------------------------
 # Architecture. Must sit immediately after project() and before any target

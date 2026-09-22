@@ -47,14 +47,14 @@ with every control and every preset. It is a port and not the plugin: read what
 
 ## Download
 
-**[v0.1.0](https://github.com/stoatworks-labs/astable/releases/tag/v0.1.0)** — prebuilt for macOS and Windows. Pick your platform:
+**[v0.1.1](https://github.com/stoatworks-labs/astable/releases/tag/v0.1.1)** — prebuilt for macOS and Windows. Pick your platform:
 
 <details>
 <summary><b>macOS</b> — Universal (Apple Silicon + Intel)</summary>
 
 | Build | Download | Size |
 | --- | --- | --- |
-| Universal (Apple Silicon + Intel) · .dmg disk image | [`astable-0.1.0-macos-universal.dmg`](https://github.com/stoatworks-labs/astable/releases/download/v0.1.0/astable-0.1.0-macos-universal.dmg) | 247 KB |
+| Universal (Apple Silicon + Intel) · .dmg disk image | [`astable-0.1.1-macos-universal.dmg`](https://github.com/stoatworks-labs/astable/releases/download/v0.1.1/astable-0.1.1-macos-universal.dmg) | 249 KB |
 | Universal (Apple Silicon + Intel) · .zip archive | [`astable-macos-universal.zip`](https://github.com/stoatworks-labs/astable/releases/latest/download/astable-macos-universal.zip) | 206 KB |
 
 </details>
@@ -64,7 +64,7 @@ with every control and every preset. It is a port and not the plugin: read what
 
 | Build | Download | Size |
 | --- | --- | --- |
-| x64 · .exe installer | [`astable-0.1.0-windows-x86_64-setup.exe`](https://github.com/stoatworks-labs/astable/releases/download/v0.1.0/astable-0.1.0-windows-x86_64-setup.exe) | 233 KB |
+| x64 · .exe installer | [`astable-0.1.1-windows-x86_64-setup.exe`](https://github.com/stoatworks-labs/astable/releases/download/v0.1.1/astable-0.1.1-windows-x86_64-setup.exe) | 235 KB |
 | x64 · .zip archive | [`astable-windows-x86_64.zip`](https://github.com/stoatworks-labs/astable/releases/latest/download/astable-windows-x86_64.zip) | 128 KB |
 
 </details>

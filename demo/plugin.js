@@ -1991,6 +1991,9 @@ for (let c = 1; c <= CHANNELS; c += 1) CHANNEL_PARAMS.push(...channelParams(c));
 
 const mounted = mountDemo({
   name: 'Astable',
+  // The FFGL type the plugin registers (PluginInfo), for the kit banner's
+  // closing sentence, which said "effect" on every page until 2026-09-24.
+  kind: 'source',
   pluginId: 'AT01',
   tagline:
     'Six 555 timers, a patch bay and a television’s deflection yoke. Nothing is drawn as a shape: the picture is where the beam went and how long it lingered there, so two square waves into X and Y give four dots because the beam dwells at the rails and crosses between them fast. The tube here is the plugin’s own shaders; the circuit is a full port of its engine — all six timers, solved comparator crossings, the capacitor-coupled yoke and the factory presets. Nothing audio is on this page.',

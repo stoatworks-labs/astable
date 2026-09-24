@@ -335,7 +335,8 @@ Mesa 26.2.0`). The DLL is cross-compiled x64 in the Parallels guest on this Mac
   P22-as-one-white is an approximation with no equivalent in a real set: a
   single-beam model cannot have a shadow mask, so what is modelled is the white
   the three phosphors make together, keeping only the red's millisecond lag.
-- **No OpenFX port and no browser demo.** Neither is in scope for 0.1.0.
+- **No OpenFX port.** Not in scope for 0.1.0. The browser demo came later; see
+  *The browser demo* below.
 - **No user guide**, so `StoatworksAbout.h` carries `guide=""`. That header is
   **generated** by `sync-about.py` now — the project is registered in the
   website's `projects.json`, in that script's TARGETS and in

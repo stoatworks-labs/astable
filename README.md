@@ -182,7 +182,7 @@ GLEW via vcpkg. C++17 + GLSL 4.10, FFGL 2.1 with the SDK as a submodule.
 ## Building and testing
 
 ```bash
-tools/verify.sh              # everything: 23 checks, about 11 seconds
+tools/verify.sh              # everything: 24 checks, about 11 seconds
 ./build/attest --period      # the datasheet formula, measured
 ./build/attest --dots        # two squares into X and Y really are four dots
 ./build/attest --yoke        # a coil's step response is the right exponential

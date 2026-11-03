@@ -16,6 +16,8 @@ television's deflection yoke, as an FFGL source plugin for
 capacitors, and the picture is wherever the beam ends up: dots, lines, curves,
 and Lissajous figures that crawl about because nothing is phase-locked.
 
+The [project page](https://stoatworks-labs.com/software/astable/) has the downloads and the video.
+
 ![A 3:2 figure in white phosphor on a rounded 4:3 tube face, bright where the beam turns around](docs/hero.png)
 
 <sub>Rendered by the plugin's own offline harness in a headless GL context, not
